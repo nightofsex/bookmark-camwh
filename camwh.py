@@ -20,7 +20,7 @@ from consolemenu.items import *
 
 
 filename = "links_camwr.json"
-
+dir = "links/"
 
 # if os.path.exists(filename):
 #     os.remove(filename)
@@ -30,7 +30,7 @@ filename = "links_camwr.json"
 # file = open("links_camwr.txt","a")
 
 
-
+pages = []
 screen = Screen()
 prompt = PromptUtils(screen)
 
@@ -149,7 +149,7 @@ def fetchLinks():
 
         links = fetch()
         newPage =  Page(query=query,page=page,links=links)
-        manager.pages.append(newPage)
+        pages.append(newPage)
 
         newPage.printLinks()
         
@@ -162,7 +162,7 @@ def fetchLinks():
 
 
 def printLinks():
-    for p in manager.pages:
+    for p in pages:
         print(f"Fetch page: {p.page}")
         p.printLinks()
     prompt.enter_to_continue() 
@@ -177,12 +177,13 @@ def saveLinks():
         return obj.__dict__
 
     manager.model = modelName
+    root = {}
+    root[modelName] = []
+    for page in pages:
+        root[modelName].append(page.__dict__)
 
-    # for page in manager.pages:
-    #     root[modelName].append(page.__dict__)
-
-    with open("links_camwr - test.json","w") as file:
-        json.dump( manager, file, indent=4)
+    with open(f"{dir}{modelName}.json","w") as file:
+        json.dump( root, file, indent=4)
 
     print("Done!")
     prompt.enter_to_continue() 
@@ -190,20 +191,22 @@ def saveLinks():
 
 
 def importLinksFromFile():
-    
-    with open("links_camwr - test.json","r") as file:
+    modelName = input("Model name: ")
+
+    with open(f"{dir}{modelName}.json","r") as file:
         p = json.load(file)
   
     
    
 
     for model in p:
-        page = p[model]
         manager.model = model
+        page = p[model]
         for p in page:
-            manager.pages.append(Page(p['page'],p['links'],p['query']))
+            pages.append(Page(p['page'],p['links'],p['query']))
         
-        print(f"Done! Imported: {len(page)} of {model}")
+    print(f"Done! Imported: {len(pages)}")
+        # print(f"Done! Imported: {len(page)} of {model}")
 
 
         
@@ -226,7 +229,7 @@ def addBookmarks():
         result = requests.get(str,cookies = cookies)
         print(f"  {json.loads(result.content)['status']} : {link}")
 
-    for page in manager.pages:
+    for page in pages:
         print(f"---- Pagina {page.page}")
         for link in page.links:
             addBookmarkLink(link)
