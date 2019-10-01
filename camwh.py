@@ -10,6 +10,7 @@
         ul.style.width="200px"
         ul.style.height="100%"
 """
+import argparse
 import json
 import requests
 from bs4 import BeautifulSoup
@@ -21,6 +22,7 @@ from consolemenu.items import *
 
 filename = "links_camwr.json"
 dir = "links/"
+dirAllLinks = dir
 
 # if os.path.exists(filename):
 #     os.remove(filename)
@@ -33,6 +35,8 @@ dir = "links/"
 pages = []
 screen = Screen()
 prompt = PromptUtils(screen)
+playlistId = None
+phpsessionid = None
 
 # def fetchpage(page):
 #     link = f"http://www.camwhores.tv/search/evad/?mode=async&function=get_block&block_id=list_videos_videos_list_search_result&q=evad&category_ids=&sort_by=&from_videos={page}&from_albums={page}&_=1569846080479"
@@ -190,8 +194,14 @@ def saveLinks():
 
 
 
-def importLinksFromFile():
-    modelName = input("Model name: ")
+def importLinksFromFile(model: None):
+    modelName = ""
+
+    if model is None:
+        modelName = input("Model name: ")
+    else:
+        modelName = model
+
 
     with open(f"{dir}{modelName}.json","r") as file:
         p = json.load(file)
@@ -205,7 +215,7 @@ def importLinksFromFile():
         for p in page:
             pages.append(Page(p['page'],p['links'],p['query']))
         
-    print(f"Done! Imported: {len(pages)}")
+    print(f"Done! Imported: {len(pages)} of {model}")
         # print(f"Done! Imported: {len(page)} of {model}")
 
 
@@ -216,18 +226,29 @@ def importLinksFromFile():
 
 
 def addBookmarks():
+    global phpsessionid, playlistId
 
-    playlistId = input("Type id of playlist: ")
-    phpsessid  = input("Type phpsessid: ")
+    if playlistId is not None:
+        id = playlistId
+    else:
+        id = input("Type id of playlist: ")
+
+    if phpsessionid is not None:
+        phpsessid = phpsessionid
+    else:
+        phpsessid  = input("Type phpsessid: ")
 
     def addBookmarkLink(link):
         idVideo = link.split("/")[4]
-        str = f"{link}?mode=async&format=json&action=add_to_favourites&video_id={idVideo}&album_id=&fav_type=10&playlist_id={playlistId}".replace("\n", "")
+        str = f"{link}?mode=async&format=json&action=add_to_favourites&video_id={idVideo}&album_id=&fav_type=10&playlist_id={id}".replace("\n", "")
 
         cookies = {'PHPSESSID': phpsessid}
-            
-        result = requests.get(str,cookies = cookies)
-        print(f"  {json.loads(result.content)['status']} : {link}")
+        try:
+            result = requests.get(str,cookies = cookies)
+            print(f"  {json.loads(result.content)['status']} : {link}")
+        except:
+            print(f"Non riuscito {link}")
+        
 
     for page in pages:
         print(f"---- Pagina {page.page}")
@@ -236,9 +257,43 @@ def addBookmarks():
     
     prompt.enter_to_continue() 
 
+def extractToTxt():
+    
+    modelName  = ""
 
-def menu():
+    if manager.model is "":
+        modelName = input("Model name: ")
+    else:
+        modelName = manager.model
+
+    if len(pages) == 0:
+        print("0 model imported")
+    else:
+        file = open(f"{dirAllLinks}{modelName}.txt","w")
+        for page in pages:
+            for link in page.links:
+                file.write(link+"\n")
         
+        file.close()
+        print("Extract done")
+    
+
+    prompt.enter_to_continue() 
+
+
+def menu(args):
+    global phpsessionid, playlistId
+
+    if args.model:
+        importLinksFromFile(args.model)
+
+    if args.id_session:
+         phpsessionid = args.id_session
+
+    if args.playlist:
+        playlistId = args.playlist
+
+
     menu = ConsoleMenu("Fetch links camwhore")
 
 
@@ -251,6 +306,8 @@ def menu():
     function_item4 = FunctionItem("Import links from file", importLinksFromFile)
     
     function_item5 = FunctionItem("Add bookmarks", addBookmarks)
+    
+    function_item6 = FunctionItem("Extract all link into file", extractToTxt)
 
 
     
@@ -259,11 +316,26 @@ def menu():
     menu.append_item(function_item3)
     menu.append_item(function_item4)
     menu.append_item(function_item5)
+    menu.append_item(function_item6)
 
     # Finally, we call show to show the menu and allow the user to interact
     menu.show()
 
 
 if __name__ == "__main__":
-    menu()
+
+    parser = argparse.ArgumentParser(description='Camwr')
+    parser.add_argument('-m', '--model',
+                        help='name of model to import from file')
+    
+    parser.add_argument('-p', '--playlist',
+                        help='id of playlist to insert bookmark')
+    
+    parser.add_argument('-i', '--id-session',
+                        help='id of session (phpsessionid)')
+
+    args = parser.parse_args()
+
+
+    menu(args)
     
