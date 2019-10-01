@@ -32,7 +32,7 @@ dirAllLinks = dir
 # file = open("links_camwr.txt","a")
 
 
-pages = []
+
 screen = Screen()
 prompt = PromptUtils(screen)
 playlistId = None
@@ -153,7 +153,7 @@ manager = ManagerPage()
 
 
 def fetchLinks():
-    # pages = []
+
 
     
 
@@ -197,7 +197,7 @@ def fetchLinks():
 
         links = fetch()
         newPage = Page(query=query,page=page,links=links)
-        pages.append(newPage)
+        manager.pages.append(newPage)
 
         newPage.printLinks()
         
@@ -210,7 +210,7 @@ def fetchLinks():
 
 
 def printLinks():
-    for p in pages:
+    for p in manager.pages:
         print(f"Fetch page: {p.page}")
         p.printLinks()
 
@@ -235,7 +235,7 @@ def saveLinks():
     manager.model = modelName
     root = {}
     root[modelName] = []
-    for page in pages:
+    for page in manager.pages:
         root[modelName].append(page.__dict__)
 
     with open(f"{dir}{modelName}.json","w") as file:
@@ -267,9 +267,9 @@ def importLinksFromFile(model: None):
         for p in page:
             manager.nLinks = manager.nLinks + len(p['links'])
             manager.nLinksFailed = manager.nLinksFailed + len(p['linksFailed'])
-            pages.append(Page(p['page'],p['links'],p['query'], p['linksFailed']))
+            manager.pages.append(Page(p['page'],p['links'],p['query'], p['linksFailed']))
         
-    print(f"Done! Imported:\n - pages: {len(pages)}\n {manager.logPages()}")
+    print(f"Done! Imported:\n - pages: {len(manager.pages)}\n {manager.logPages()}")
         # print(f"Done! Imported: {len(page)} of {model}")
 
 
@@ -283,7 +283,7 @@ def addBookmarks():
    
         
 
-    for page in pages:
+    for page in manager.pages:
         print(f"---- Pagina {page.page}")
         for link in page.links:
             page.addBookmarkLink(link)
@@ -295,7 +295,7 @@ def retryBookmarkFailed():
         print("There aren't bookmark failed")
         return
     
-    for page in pages:
+    for page in manager.pages:
         nLinksFailed = len(page.linksFailed)
         if nLinksFailed == 0:
             continue
@@ -316,11 +316,11 @@ def extractToTxt():
     else:
         modelName = manager.model
 
-    if len(pages) == 0:
+    if len(manager.pages) == 0:
         print("0 model imported")
     else:
         file = open(f"{dirAllLinks}{modelName}.txt","w")
-        for page in pages:
+        for page in manager.pages:
             for link in page.links:
                 file.write(link+"\n")
         
