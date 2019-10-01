@@ -35,48 +35,8 @@ dirAllLinks = dir
 
 screen = Screen()
 prompt = PromptUtils(screen)
-playlistId = None
+
 phpsessionid = None
-
-# def fetchpage(page):
-#     link = f"http://www.camwhores.tv/search/evad/?mode=async&function=get_block&block_id=list_videos_videos_list_search_result&q=evad&category_ids=&sort_by=&from_videos={page}&from_albums={page}&_=1569846080479"
-#     result = requests.get(link)
-
-#     while True:
-#         if result.status_code == 200:
-#             c = result.content
-
-#             soup = BeautifulSoup(c, "html.parser")
-#             links = soup.select(".list-videos a")
-#             print(f"---- Pagina {page}")
-
-            
-#             for link in links:
-#                 str = link['href']
-#                 file.write(str+"\n")
-#                 print(str)
-#                 linksAll.append(str)
-
-#             nextpage(page)
-#             break
-
-
-# def addBookmarks(linksAll):
-#     for link in linksAll:
-#         id = link.split("/")[4]
-#         str = f"{link}?mode=async&format=json&action=add_to_favourites&video_id={id}&album_id=&fav_type=10&playlist_id={playlistId}".replace("\n", "")
-#         cookies = {'PHPSESSID': '50vofcde8oqogd4ls27ojki1rl'}
-        
-#         result = requests.get(str,cookies = cookies)
-#         print(id +" "+ result.content.status + linksAll.index(link))
-#         # time.sleep(1)
-#         # return
-
-# def nextpage(page):
-#     page = page + 1
-#     if page == MAX_PAGE:
-#         return
-#     fetchpage(page)
 
 
 class Page():
@@ -95,13 +55,13 @@ class Page():
         
 
     def addBookmarkLink(self, link):
-        global phpsessionid, playlistId
+        global phpsessionid
 
-        if playlistId is not None:
-            id = playlistId
+        if manager.playlistId is not None:
+            id = manager.playlistId
         else:
             id = input("Type id of playlist: ")
-            playlistId = id
+            manager.playlistId = id
 
         if phpsessionid is not None:
             phpsessid = phpsessionid
@@ -121,6 +81,7 @@ class Page():
             if self.linksFailed.index(link) >= 0:
                 self.linksFailed.remove(link)
                 manager.nLinksFailed = manager.nLinksFailed - 1
+            return
         except:
             manager.areThereLinksFailed = True
             self.linksFailed.append(link)
@@ -130,12 +91,13 @@ class Page():
 
 class ManagerPage():
     
-    def __init__(self):
+    def __init__(self, playlist = None):
         self._model = ""
         self.pages = []
         self.areThereLinksFailed = False
         self.nLinks = 0
         self.nLinksFailed = 0
+        self.playlistId = playlist
     
     @property
     def model(self):
@@ -152,12 +114,14 @@ class ManagerPage():
 manager = ManagerPage()
 
 
-def fetchLinks():
+def fetchLinks(q = None):
 
-
+    query = None
+    if q is None:
+        query       = input("Query model: ")
+    else:
+        query = q
     
-
-    query       = input("Query model: ")
     fromPage    = input("From page(1): ")
     toPage      = input("To page(1): ")
     
@@ -177,13 +141,18 @@ def fetchLinks():
 
     def fetch():
         link = f"http://www.camwhores.tv/search/{query}/?mode=async&function=get_block&block_id=list_videos_videos_list_search_result&q={query}&category_ids=&sort_by=&from_videos={page}&from_albums={page}&_=1569846080479"
-        res = requests.get(link)
-        while True:
-            if res.status_code == 200:
-                soup = BeautifulSoup(res.content, "html.parser")
-                linksEl = soup.select(".list-videos a")
-                return [i['href'] for i in linksEl]
-        
+        try:
+            res = requests.get(link)           
+                
+        except:
+            print(f"Page failed: {page}")
+            prompt.enter_to_continue() 
+            return []
+
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.content, "html.parser")
+            linksEl = soup.select(".list-videos a")
+            return [i['href'] for i in linksEl]
         
 
 
@@ -196,7 +165,8 @@ def fetchLinks():
         print(f"Fetch page: {page}")
 
         links = fetch()
-        newPage = Page(query=query,page=page,links=links)
+        newPage = Page(query=query,page=page,links=links, linksFailed=[])
+        manager.nLinks = manager.nLinks + len(newPage.links)
         manager.pages.append(newPage)
 
         newPage.printLinks()
@@ -219,12 +189,9 @@ def printLinks():
 
 
 def saveLinks():
-    modelName = ""
     
     if manager.model is "":
-        modelName = input("Model name: ")
-    else:
-        modelName = manager.model
+        manager.model = input("Model name: ")
 
     
     
@@ -232,13 +199,15 @@ def saveLinks():
     def obj_to_dict(obj):
         return obj.__dict__
 
-    manager.model = modelName
     root = {}
-    root[modelName] = []
-    for page in manager.pages:
-        root[modelName].append(page.__dict__)
+    root['playlistId']  = manager.playlistId
+    root['model']       = manager.model
+    root[manager.model]     = []
 
-    with open(f"{dir}{modelName}.json","w") as file:
+    for page in manager.pages:
+        root[manager.model].append(page.__dict__)
+
+    with open(f"{dir}{manager.model} -test.json","w") as file:
         json.dump( root, file, indent=4)
 
     print("Done!")
@@ -246,7 +215,7 @@ def saveLinks():
 
 
 
-def importLinksFromFile(model: None):
+def importLinksFromFile(model = None):
     modelName = ""
 
     if model is None:
@@ -256,18 +225,20 @@ def importLinksFromFile(model: None):
 
 
     with open(f"{dir}{modelName}.json","r") as file:
-        p = json.load(file)
+        manPages = json.load(file)
   
     
    
     
-    for model in p:
-        manager.model = model
-        page = p[model]
-        for p in page:
-            manager.nLinks = manager.nLinks + len(p['links'])
-            manager.nLinksFailed = manager.nLinksFailed + len(p['linksFailed'])
-            manager.pages.append(Page(p['page'],p['links'],p['query'], p['linksFailed']))
+    manager.model       = manPages['model']
+    manager.playlistId  = manPages['playlistId']
+
+    for page in manPages[manager.model]:
+        manager.nLinks = manager.nLinks + len(page['links'])
+        manager.nLinksFailed = manager.nLinksFailed + len(page['linksFailed'])
+        manager.pages.append(Page(page['page'],page['links'],page['query'], page['linksFailed']))
+        if manager.nLinksFailed > 0:
+            manager.areThereLinksFailed = True
         
     print(f"Done! Imported:\n - pages: {len(manager.pages)}\n {manager.logPages()}")
         # print(f"Done! Imported: {len(page)} of {model}")
@@ -332,7 +303,7 @@ def extractToTxt():
 
 
 def menu(args):
-    global phpsessionid, playlistId
+    global phpsessionid
 
     if args.model:
         importLinksFromFile(args.model)
@@ -341,8 +312,10 @@ def menu(args):
          phpsessionid = args.id_session
 
     if args.playlist:
-        playlistId = args.playlist
+        manager.playlistId = args.playlist
 
+    if args.query:
+        fetchLinks(args.query)
 
     menu = ConsoleMenu("Fetch links camwhore")
 
@@ -353,7 +326,7 @@ def menu(args):
     
     function_item3 = FunctionItem("Save links", saveLinks)
     
-    function_item4 = FunctionItem("Import links from file", importLinksFromFile, [None])
+    function_item4 = FunctionItem("Import links from file", importLinksFromFile)
     
     function_item5 = FunctionItem("Add bookmarks", addBookmarks)
     
@@ -380,6 +353,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Camwr')
     parser.add_argument('-m', '--model',
                         help='name of model to import from file')
+
+    parser.add_argument('-q', '--query',
+                        help='query to send')
     
     parser.add_argument('-p', '--playlist',
                         help='id of playlist to insert bookmark')
