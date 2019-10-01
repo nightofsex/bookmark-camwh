@@ -80,21 +80,62 @@ phpsessionid = None
 
 
 class Page():
-    def __init__(self, page, links, query):
+    def __init__(self, page, links, query, linksFailed: []):
         self.page = page
         self.links = links
+        self.linksFailed = linksFailed
         self.query = query
     
+   
     
     def printLinks(self):
         for link in self.links:
             print(f"\t{link}")
+        
+        
+
+    def addBookmarkLink(self, link):
+        global phpsessionid, playlistId
+
+        if playlistId is not None:
+            id = playlistId
+        else:
+            id = input("Type id of playlist: ")
+            playlistId = id
+
+        if phpsessionid is not None:
+            phpsessid = phpsessionid
+        else:
+            phpsessid  = input("Type phpsessid: ")
+            phpsessionid = phpsessid
+
+
+        idVideo = link.split("/")[4]
+        str = f"{link}?mode=async&format=json&action=add_to_favourites&video_id={idVideo}&album_id=&fav_type=10&playlist_id={id}".replace("\n", "")
+
+        cookies = {'PHPSESSID': phpsessid}
+        result = None
+        try:
+            result = requests.get(str,cookies = cookies)
+            print(f"  {json.loads(result.content)['status']} : {link}")
+            if self.linksFailed.index(link) >= 0:
+                self.linksFailed.remove(link)
+                manager.nLinksFailed = manager.nLinksFailed - 1
+        except:
+            manager.areThereLinksFailed = True
+            self.linksFailed.append(link)
+            print(f"Non riuscito {link}")
+            return 
+
 
 class ManagerPage():
     
     def __init__(self):
         self._model = ""
         self.pages = []
+        self.areThereLinksFailed = False
+        self.nLinks = 0
+        self.nLinksFailed = 0
     
     @property
     def model(self):
@@ -103,6 +144,9 @@ class ManagerPage():
     @model.setter
     def model(self, modelName):
         self._model = modelName
+    
+    def logPages(self):
+        return f"- model: {self._model} \n - links: {self.nLinks} \n - links failed: {self.nLinksFailed}"
         
 
 manager = ManagerPage()
@@ -152,7 +196,7 @@ def fetchLinks():
         print(f"Fetch page: {page}")
 
         links = fetch()
-        newPage =  Page(query=query,page=page,links=links)
+        newPage = Page(query=query,page=page,links=links)
         pages.append(newPage)
 
         newPage.printLinks()
@@ -169,12 +213,20 @@ def printLinks():
     for p in pages:
         print(f"Fetch page: {p.page}")
         p.printLinks()
+
+    print(manager.logPages())
     prompt.enter_to_continue() 
 
 
 def saveLinks():
+    modelName = ""
+    
+    if manager.model is "":
+        modelName = input("Model name: ")
+    else:
+        modelName = manager.model
 
-    modelName = input("Model name: ")
+    
     
 
     def obj_to_dict(obj):
@@ -208,14 +260,16 @@ def importLinksFromFile(model: None):
   
     
    
-
+    
     for model in p:
         manager.model = model
         page = p[model]
         for p in page:
-            pages.append(Page(p['page'],p['links'],p['query']))
+            manager.nLinks = manager.nLinks + len(p['links'])
+            manager.nLinksFailed = manager.nLinksFailed + len(p['linksFailed'])
+            pages.append(Page(p['page'],p['links'],p['query'], p['linksFailed']))
         
-    print(f"Done! Imported: {len(pages)} of {model}")
+    print(f"Done! Imported:\n - pages: {len(pages)}\n {manager.logPages()}")
         # print(f"Done! Imported: {len(page)} of {model}")
 
 
@@ -226,34 +280,30 @@ def importLinksFromFile(model: None):
 
 
 def addBookmarks():
-    global phpsessionid, playlistId
-
-    if playlistId is not None:
-        id = playlistId
-    else:
-        id = input("Type id of playlist: ")
-
-    if phpsessionid is not None:
-        phpsessid = phpsessionid
-    else:
-        phpsessid  = input("Type phpsessid: ")
-
-    def addBookmarkLink(link):
-        idVideo = link.split("/")[4]
-        str = f"{link}?mode=async&format=json&action=add_to_favourites&video_id={idVideo}&album_id=&fav_type=10&playlist_id={id}".replace("\n", "")
-
-        cookies = {'PHPSESSID': phpsessid}
-        try:
-            result = requests.get(str,cookies = cookies)
-            print(f"  {json.loads(result.content)['status']} : {link}")
-        except:
-            print(f"Non riuscito {link}")
+   
         
 
     for page in pages:
         print(f"---- Pagina {page.page}")
         for link in page.links:
-            addBookmarkLink(link)
+            page.addBookmarkLink(link)
+    
+    prompt.enter_to_continue() 
+
+def retryBookmarkFailed():
+    if manager.areThereLinksFailed is True:
+        print("There aren't bookmark failed")
+        return
+    
+    for page in pages:
+        nLinksFailed = len(page.linksFailed)
+        if nLinksFailed == 0:
+            continue
+
+        print(f"\n---- Pagina {page.page}, n link: {nLinksFailed}")
+        for link in page.linksFailed:
+            print(link) 
+            page.addBookmarkLink(link)
     
     prompt.enter_to_continue() 
 
@@ -303,11 +353,13 @@ def menu(args):
     
     function_item3 = FunctionItem("Save links", saveLinks)
     
-    function_item4 = FunctionItem("Import links from file", importLinksFromFile)
+    function_item4 = FunctionItem("Import links from file", importLinksFromFile, [None])
     
     function_item5 = FunctionItem("Add bookmarks", addBookmarks)
     
-    function_item6 = FunctionItem("Extract all link into file", extractToTxt)
+    function_item6 = FunctionItem("Retry bookmarks failed", retryBookmarkFailed)
+    
+    function_item7 = FunctionItem("Extract all link into file", extractToTxt)
 
 
     
@@ -317,6 +369,7 @@ def menu(args):
     menu.append_item(function_item4)
     menu.append_item(function_item5)
     menu.append_item(function_item6)
+    menu.append_item(function_item7)
 
     # Finally, we call show to show the menu and allow the user to interact
     menu.show()
